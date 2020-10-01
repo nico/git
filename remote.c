@@ -2405,34 +2405,18 @@ cleanup_return:
 	return ret;
 }
 
-/* Toggle the "commit-graph" feature; return the previously set state. */
-static int toggle_commit_graph(struct repository *repo, int disable) {
-	int prev = repo->commit_graph_disabled;
-	repo->commit_graph_disabled = disable;
-	return prev;
-}
-
 /*
  * Check for reachability of a remote-tracking
  * ref in the reflog entries of its local ref.
  */
 static void check_if_includes_upstream(struct ref *remote)
 {
-	int prev;
 	struct ref *local = get_local_ref(remote->name);
 	if (!local)
 		return;
 
-	/*
-	 * TODO: Remove "toggle_commit_graph()" calls around the check.
-	 * Depending on whether "commit-graph" enabled or not,
-	 * "in_merge_bases_many()" returns different results;
-	 * disable it temporarily when the check runs.
-	 */
-	prev = toggle_commit_graph(the_repository, 1);
 	if (is_reachable_in_reflog(local->name, remote) <= 0)
 		remote->unreachable = 1;
-	toggle_commit_graph(the_repository, prev);
 }
 
 static void apply_cas(struct push_cas_option *cas,
