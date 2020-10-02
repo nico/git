@@ -308,45 +308,44 @@ bisect_run () {
 
 		# Check script passes for good rev.
 		command="$@"
-		eval_gettextln "verifying \$command passes at \$CURRENT_BISECT_GOOD"
-		git checkout "$CURRENT_BISECT_GOOD"
+		eval_gettextln "verifying script passes at \$TERM_GOOD rev"
+		git checkout -q "$CURRENT_BISECT_GOOD"
 		"$@"
 		res=$?
-		echo got $res
 		if [ $res -ne 0 ]
 		then
 			eval_gettextln "bisect run --verify failed:
-exit code \$res from '\$command' is != 0, but expected pass" >&2
+exit code \$res is != 0, but expected pass" >&2
 			exit $res
 		fi
 
 		# Check script fails orderly for bad rev.
 		command="$@"
-		eval_gettextln "verifying \$command fails at \$CURRENT_BISECT_BAD"
-		git checkout "$CURRENT_BISECT_BAD"
+		eval_gettextln "verifying script fails at \$TERM_BAD rev"
+		git checkout -q "$CURRENT_BISECT_BAD"
 		"$@"
 		res=$?
 		if [ $res -lt 0 -o $res -ge 128 ]
 		then
 			eval_gettextln "bisect run --verify failed:
-exit code \$res from '\$command' is < 0 or >= 128" >&2
+exit code \$res is < 0 or >= 128" >&2
 			exit $res
 		fi
 		if [ $res -eq 0 ]
 		then
 			eval_gettextln "bisect run --verify failed:
-exit code \$res from '\$command' is 0, but expected fail" >&2
+exit code is 0, but expected fail" >&2
 			exit $res
 		fi
 		if [ $res -eq 125 ]
 		then
 			eval_gettextln "bisect run --verify failed:
-exit code \$res from '\$command' means skip, but expected fail" >&2
+exit code 125 means skip, but expected fail" >&2
 			exit $res
 		fi
 
 		# Check out pre-verify rev again.
-		git checkout $rev
+		git checkout -q "$rev"
 	fi
 
 	git bisect--helper --bisect-next-check $TERM_GOOD $TERM_BAD fail || exit
