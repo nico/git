@@ -26,7 +26,7 @@ git bisect replay <logfile>
 	replay bisection log.
 git bisect log
 	show bisect log.
-git bisect run <cmd>...
+git bisect run [--verify | --no-verify] <cmd>...
 	use <cmd>... to automatically bisect.
 
 Please use "git help bisect" to get the full man page.'
@@ -38,6 +38,8 @@ _x40='[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]'
 _x40="$_x40$_x40$_x40$_x40$_x40$_x40$_x40$_x40"
 TERM_BAD=bad
 TERM_GOOD=good
+CURRENT_BISECT_BAD=
+CURRENT_BISECT_GOOD=
 
 bisect_head()
 {
@@ -204,6 +206,7 @@ bisect_visualize() {
 	eval '"$@"' --bisect -- $(cat "$GIT_DIR/BISECT_NAMES")
 }
 
+# XXX like so
 bisect_replay () {
 	file="$1"
 	test "$#" -eq 1 || die "$(gettext "No logfile given")"
@@ -237,7 +240,115 @@ bisect_replay () {
 	bisect_auto_next
 }
 
+get_current_bisect_bounds () {
+	test -s "$GIT_DIR/BISECT_LOG" || die "$(gettext "We are not bisecting.")"
+	oIFS="$IFS" IFS="$IFS$(printf '\015')"
+	while read git bisect command rev tail
+	do
+		test "$git $bisect" = "git bisect" || test "$git" = "git-bisect" || continue
+		if test "$git" = "git-bisect"
+		then
+			rev="$command"
+			command="$bisect"
+		fi
+		get_terms
+		git bisect--helper --check-and-set-terms "$command" "$TERM_GOOD" "$TERM_BAD" || exit
+		get_terms
+		case "$command" in
+		skip|start)
+			;;
+		"$TERM_GOOD")
+			CURRENT_BISECT_GOOD=$rev ;;
+		"$TERM_BAD")
+			CURRENT_BISECT_BAD=$rev ;;
+		*)
+			die "$(gettext "?? what are you talking about?")" ;;
+		esac
+	done <"$GIT_DIR/BISECT_LOG"
+	IFS="$oIFS"
+}
+
 bisect_run () {
+	verify=
+	while test $# -ne 0
+	do
+		case "$1" in
+		--verify)
+			verify=t
+			;;
+		--no-verify)
+			verify=
+			;;
+	--)
+			shift
+			break
+			;;
+		-*)
+			usage
+			;;
+		*)
+			break
+			;;
+		esac
+		shift
+	done
+
+	if [ -n "$verify" ]; then
+		git rev-parse --verify -q BISECT_HEAD > /dev/null && die "$(gettext "bisect run --verify is incompatible with --no-checkout")"
+
+		get_current_bisect_bounds
+		test -n "$CURRENT_BISECT_BAD" || die "$(gettext "bisect run --verify: no current bad revision")"
+		test -n "$CURRENT_BISECT_GOOD" || die "$(gettext "bisect run --verify: no current good revision")"
+
+		bisected_head=$(bisect_head)
+		rev=$(git rev-parse --verify "$bisected_head") ||
+			die "$(eval_gettext "Bad rev input: \$bisected_head")"
+
+		# XXX need to restore rev below on failure somehow
+
+		# Check script passes for good rev.
+		command="$@"
+		eval_gettextln "verifying \$command passes at \$CURRENT_BISECT_GOOD"
+		git checkout "$CURRENT_BISECT_GOOD"
+		"$@"
+		res=$?
+		echo got $res
+		if [ $res -ne 0 ]
+		then
+			eval_gettextln "bisect run --verify failed:
+exit code \$res from '\$command' is != 0, but expected pass" >&2
+			exit $res
+		fi
+
+		# Check script fails orderly for bad rev.
+		command="$@"
+		eval_gettextln "verifying \$command fails at \$CURRENT_BISECT_BAD"
+		git checkout "$CURRENT_BISECT_BAD"
+		"$@"
+		res=$?
+		if [ $res -lt 0 -o $res -ge 128 ]
+		then
+			eval_gettextln "bisect run --verify failed:
+exit code \$res from '\$command' is < 0 or >= 128" >&2
+			exit $res
+		fi
+		if [ $res -eq 0 ]
+		then
+			eval_gettextln "bisect run --verify failed:
+exit code \$res from '\$command' is 0, but expected fail" >&2
+			exit $res
+		fi
+		if [ $res -eq 125 ]
+		then
+			eval_gettextln "bisect run --verify failed:
+exit code \$res from '\$command' means skip, but expected fail" >&2
+			exit $res
+		fi
+
+		# Check out pre-verify rev again.
+		git checkout $rev
+	fi
+
 	git bisect--helper --bisect-next-check $TERM_GOOD $TERM_BAD fail || exit
 
 	test -n "$*" || die "$(gettext "bisect run failed: no command provided.")"

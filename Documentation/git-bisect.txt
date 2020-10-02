@@ -26,7 +26,7 @@ on the subcommand:
  git bisect (visualize|view)
  git bisect replay <logfile>
  git bisect log
- git bisect run <cmd>...
+ git bisect run [--verify] <cmd>...
  git bisect help
 
 This command uses a binary search algorithm to find which commit in
@@ -93,6 +93,29 @@ Eventually there will be no more revisions left to inspect, and the
 command will print out a description of the first bad commit. The
 reference `refs/bisect/bad` will be left pointing at that commit.
 
+OPTIONS
+-------
+--no-checkout::
++
+Do not checkout the new working tree at each iteration of the bisection
+process. Instead just update a special reference named `BISECT_HEAD` to make
+it point to the commit that should be tested.
++
+This option may be useful when the test you would perform in each step
+does not require a checked out tree.
++
+If the repository is bare, `--no-checkout` is assumed.
+
+--first-parent::
++
+Follow only the first parent commit upon seeing a merge commit.
++
+In detecting regressions introduced through the merging of a branch, the merge
+commit will be identified as introduction of the bug and its ancestors will be
+ignored.
++
+This option is particularly useful in avoiding false positives when a merged
+branch contained broken or non-buildable commits, but the merge itself was OK.
 
 Bisect reset
 ~~~~~~~~~~~~
@@ -317,7 +340,7 @@ If you have a script that can tell if the current source code is good
 or bad, you can bisect by issuing the command:
 
 ------------
-$ git bisect run my_script arguments
+$ git bisect run [--verify] my_script arguments
 ------------
 
 Note that the script (`my_script` in the above example) should exit
@@ -354,27 +377,12 @@ determine the eventual outcome of the bisect session.
 
 OPTIONS
 -------
---no-checkout::
+--verify::
 +
-Do not checkout the new working tree at each iteration of the bisection
-process. Instead just update a special reference named `BISECT_HEAD` to make
-it point to the commit that should be tested.
-+
-This option may be useful when the test you would perform in each step
-does not require a checked out tree.
-+
-If the repository is bare, `--no-checkout` is assumed.
-
---first-parent::
-+
-Follow only the first parent commit upon seeing a merge commit.
-+
-In detecting regressions introduced through the merging of a branch, the merge
-commit will be identified as introduction of the bug and its ancestors will be
-ignored.
-+
-This option is particularly useful in avoiding false positives when a merged
-branch contained broken or non-buildable commits, but the merge itself was OK.
+Before the actual bisect run, check out the current bad revision and
+verify that the script exits with a code between 1 and 127 (inclusive),
+except 125, then check out the current good revision and verify that
+the script exits with code 0. If not, abort the bisect run.
 
 EXAMPLES
 --------
