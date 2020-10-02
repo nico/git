@@ -309,12 +309,12 @@ bisect_run () {
 		rev=$(git rev-parse --verify "$bisected_head") ||
 			die "$(eval_gettext "Bad rev input: \$bisected_head")"
 
-		# XXX need to restore rev below on failure somehow
+		trap "git checkout -q $rev" 0
 
 		# Check script passes for good rev.
 		command="$@"
 		eval_gettextln "verifying script passes at \$TERM_GOOD rev"
-		eval git checkout -q "$CURRENT_BISECT_GOOD"
+		eval git checkout -q "$CURRENT_BISECT_GOOD" || die "$(eval_gettext "failed to check out \$TERM_GOOD rev")"
 		"$@"
 		res=$?
 		if [ $res -ne 0 ]
@@ -326,7 +326,7 @@ bisect_run () {
 		# Check script fails orderly for bad rev.
 		command="$@"
 		eval_gettextln "verifying script fails at \$TERM_BAD rev"
-		eval git checkout -q "$CURRENT_BISECT_BAD"
+		eval git checkout -q "$CURRENT_BISECT_BAD" || die "$(eval_gettext "failed to check out \$TERM_BAD rev")"
 		"$@"
 		res=$?
 		if [ $res -lt 0 -o $res -ge 128 ]
@@ -347,6 +347,7 @@ bisect_run () {
 
 		# Check out pre-verify rev again.
 		git checkout -q "$rev"
+		trap '-' 0
 	fi
 
 	git bisect--helper --bisect-next-check $TERM_GOOD $TERM_BAD fail || exit
