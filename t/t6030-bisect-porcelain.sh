@@ -324,15 +324,17 @@ test_expect_success 'bisect run & skip: find first bad' '
 test_expect_success 'bisect run --verify: script fails for good rev' '
 	git bisect reset &&
 	git bisect start $HASH7 $HASH1 &&
-	! git bisect run false >my_bisect_log.txt &&
-	grep "aborting: run script fails for good commit" my_bisect_log.txt
+	! git bisect run --verify false >my_bisect_log.txt 2>&1 &&
+	grep "aborting: run script fails for good rev" my_bisect_log.txt
 '
 
 test_expect_success 'bisect run --verify: script passes for bad rev' '
 	git bisect reset &&
-	git bisect start $HASH7 $HASH1 &&
-	! git bisect run true >my_bisect_log.txt &&
-	grep "aborting: run script passes for bad commit" my_bisect_log.txt
+	git bisect start &&
+	git bisect bad $HASH7 &&
+	git bisect good $HASH1 &&
+	! git bisect run --verify true >my_bisect_log.txt 2>&1 &&
+	grep "aborting: run script passes for bad rev" my_bisect_log.txt
 '
 
 test_expect_success 'bisect skip only one range' '

@@ -218,6 +218,7 @@ bisect_replay () {
 		test "$git $bisect" = "git bisect" || test "$git" = "git-bisect" || continue
 		if test "$git" = "git-bisect"
 		then
+			tail="$rev"
 			rev="$command"
 			command="$bisect"
 		fi
@@ -248,6 +249,7 @@ get_current_bisect_bounds () {
 		test "$git $bisect" = "git bisect" || test "$git" = "git-bisect" || continue
 		if test "$git" = "git-bisect"
 		then
+			tail="$rev"
 			rev="$command"
 			command="$bisect"
 		fi
@@ -255,12 +257,16 @@ get_current_bisect_bounds () {
 		git bisect--helper --check-and-set-terms "$command" "$TERM_GOOD" "$TERM_BAD" || exit
 		get_terms
 		case "$command" in
-		skip|start)
+		skip)
+			;;
+		start)
+			CURRENT_BISECT_BAD="$rev"
+			CURRENT_BISECT_GOOD="$tail"
 			;;
 		"$TERM_GOOD")
-			CURRENT_BISECT_GOOD=$rev ;;
+			CURRENT_BISECT_GOOD="$rev" ;;
 		"$TERM_BAD")
-			CURRENT_BISECT_BAD=$rev ;;
+			CURRENT_BISECT_BAD="$rev" ;;
 		*)
 			die "$(gettext "?? what are you talking about?")" ;;
 		esac
@@ -309,39 +315,35 @@ bisect_run () {
 		# Check script passes for good rev.
 		command="$@"
 		eval_gettextln "verifying script passes at \$TERM_GOOD rev"
-		git checkout -q "$CURRENT_BISECT_GOOD"
+		eval git checkout -q "$CURRENT_BISECT_GOOD"
 		"$@"
 		res=$?
 		if [ $res -ne 0 ]
 		then
-			eval_gettextln "bisect run --verify failed:
-exit code \$res is != 0, but expected pass" >&2
+			eval_gettextln "aborting: run script fails for \$TERM_GOOD rev" >&2
 			exit $res
 		fi
 
 		# Check script fails orderly for bad rev.
 		command="$@"
 		eval_gettextln "verifying script fails at \$TERM_BAD rev"
-		git checkout -q "$CURRENT_BISECT_BAD"
+		eval git checkout -q "$CURRENT_BISECT_BAD"
 		"$@"
 		res=$?
 		if [ $res -lt 0 -o $res -ge 128 ]
 		then
-			eval_gettextln "bisect run --verify failed:
-exit code \$res is < 0 or >= 128" >&2
-			exit $res
+			eval_gettextln "aborting: exit code \$res is < 0 or >= 128" >&2
+			exit 1
 		fi
 		if [ $res -eq 0 ]
 		then
-			eval_gettextln "bisect run --verify failed:
-exit code is 0, but expected fail" >&2
-			exit $res
+			eval_gettextln "aborting: run script passes for \$TERM_BAD rev" >&2
+			exit 1
 		fi
 		if [ $res -eq 125 ]
 		then
-			eval_gettextln "bisect run --verify failed:
-exit code 125 means skip, but expected fail" >&2
-			exit $res
+			eval_gettextln "aborting: run sript returns 125 (skip) for \$TERM_BAD rev" >&2
+			exit 1
 		fi
 
 		# Check out pre-verify rev again.
